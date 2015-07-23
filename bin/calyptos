@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, SUPPRESS, _SubParsersAction
 
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, SUPPRESS, _SubParsersAction
 from fabric.colors import yellow
 from fabric.network import disconnect_all
 from fabric.operations import run as fabric_run
@@ -12,6 +12,7 @@ from calyptos.rolebuilder import RoleBuilder
 import os
 import sys
 import shutil
+import platform
 
 dot_dir = os.path.expanduser('~/.calyptos')
 # by default we look in users home dir first
@@ -34,28 +35,32 @@ def locate_cfgfile():
         mi = None
         if os.path.isfile(item):
             if item != default_cfgfile:
-                try:
-                    import rpm
+                if platform.system() == "Linux":
+                    try:
+                        import rpm # I think this is required by
+                                   # other parts of python so I'm safe using it
+                    except ImportError:
+                        # if we can't import the rpm module
+                        # we will just return the /usr/share cfgfile
+                        return item
                     ts = rpm.TransactionSet()
-                    mi = ts.dbMatch("name", "calyptos")
-                except ImportError as IE:
-                    sys.stderr.write("IMPORT ERROR: {0}\n".format(IE))
-                if mi is None or (len(mi) == 0):
-                    if not os.path.isfile(default_cfgfile):
-                        if not os.path.exists(dot_dir):
+                    mi = ts.dbMatch("name","calyptos")
+                    if (len(mi) == 0):
+                        if not os.path.isfile(default_cfgfile):
+                            if not os.path.exists(dot_dir):
+                                try:
+                                    os.makedirs(dot_dir)
+                                except OSError as e:
+                                    print('Error: cannot create directory ~/.calyptos: %s' % e)
                             try:
-                                os.makedirs(dot_dir)
-                            except OSError as e:
-                                print('Error: cannot create directory ~/.calyptos: %s' % e)
-                        try:
-                            # if this copy works, return default_cfgfile
-                            # because it will be used going forward
-                            shutil.copy('/usr/share/calyptos/config.yml', default_cfgfile)
-                            return default_cfgfile
-                        except shutil.Error as e:
-                            print('Error: %s' % e)
-                        except IOError as e:
-                            print('Error: %s' % e.strerror)
+                                # if this copy works, return default_cfgfile
+                                # because it will be used going forward
+                                shutil.copy('/usr/share/calyptos/config.yml', default_cfgfile)
+                                return default_cfgfile
+                            except shutil.Error as e:
+                                print('Error: %s' % e)
+                            except IOError as e:
+                                print('Error: %s' % e.strerror)
             # this is not in an else: block because its a
             # last resort for the case where import rpm
             # doesn't succeed above, because we still need
@@ -127,7 +132,7 @@ def execute(argp, command=None, role=None):
     Execute a `task` honoring host/roles, etc.
     """
     role = role or argp.role
-    command = command or argp.command
+    command = command or argp.execute_command
     component_deployer = RoleBuilder(argp.environment)
     env.hosts = component_deployer.roles[role]
     env.password = argp.password
@@ -182,7 +187,7 @@ def add_subparser(subparsers, func, title=None, helpstr=None,
     if driver:
         myparser.add_argument('-d', '--driver', default=driver, help='driver')
     if environment:
-        myparser.add_argument('-e', '--environment',
+        myparser.add_argument('-e', '--environment', default=None,
                               help='Path to the environment file that defines the system Calyptos '
                                    'will interact with')
     if password:
@@ -211,9 +216,6 @@ if __name__ == '__main__':
         """
         return parser.print_help()
 
-    # Add the global config options (this may need to be reworked and/or the subparsers may need
-    # to set their attr: parents=[parser] etc.?
-
     subparsers = parser.add_subparsers(help='COMMANDS', dest='command')
     subparsers.default = 'help'
 
@@ -228,7 +230,7 @@ if __name__ == '__main__':
     help_subp.print_usage = help_subp.print_help
     # Add the subparser for execute which accepts different args than the other options...
     execute_subp = add_subparser(subparsers, execute, branch=None, cookbook_repo=None, driver=None)
-    execute_subp.add_argument('EXECUTE_COMMAND', metavar='EXECUTE_COMMAND',
+    execute_subp.add_argument('execute_command', metavar='EXECUTE_COMMAND',
                               help='Command to run against role members')
     execute_subp.add_argument('-r', '--role', default='all', help='role')
 
@@ -270,21 +272,14 @@ if __name__ == '__main__':
         password = raw_input('\n\tEnter the SSH password for hosts in the deployment: ')
         setattr(argp, 'password', str(password).strip())
 
-
-    buf = "\nRunning Calyptos with args:\n"
-    nlen = 0
-    for name in argp.__dict__.iterkeys():
-        if len(name) > nlen:
-            nlen = len(name)
-    for name, value in argp.__dict__.iteritems():
-        buf += '{0} -> "{1}"\n'.format('"{0}"'.format(name).ljust(nlen), value)
-    print buf + "\n"
-
     if hasattr(argp, 'environment'):
+        if not argp.environment:
+            raise ValueError('Environment yaml file not provided, use -e or --environment to '
+                             'provide a local path')
         # Test if the provided environment file is present and readable...
         with open(argp.environment) as envfile:
             pass
 
     # Finally execute the requested operation's function
     sub_command(argp)
-    sys.exit(0)
+    exit(0)
