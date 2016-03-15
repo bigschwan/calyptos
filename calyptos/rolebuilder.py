@@ -221,4 +221,5 @@ class RoleBuilder():
                 for host in role_set:
                     all_set.add(host)
             roles['all'] = all_set
+            print 'Roles for "all"\n""{0}"'.format("\n".join(str(x) for x in roles['all']))
         return roles
