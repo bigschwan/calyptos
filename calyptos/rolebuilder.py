@@ -21,6 +21,7 @@ class RoleBuilder():
                  'riak-node',
                  'haproxy',
                  'nginx',
+                 'machines',
                  'all']
 
     def __init__(self, environment_file='environment.yml'):
@@ -46,6 +47,12 @@ class RoleBuilder():
     def get_riak_attributes(self):
         try:
             return self.env_dict['riakcs_cluster']
+        except:
+            return None
+
+    def get_machines_section(self):
+        try:
+            return self.env_dict.get('machines', None)
         except:
             return None
 
@@ -76,25 +83,35 @@ class RoleBuilder():
         return all_hosts
 
     def get_roles(self):
+        print 'Starting get roles...'
         roles = self._initialize_roles()
         euca_attributes = self.get_euca_attributes()
         ceph_attributes = self.get_ceph_attributes()
         riak_attributes = self.get_riak_attributes()
+        machine_attributes = self.get_machines_section()
 
-        roles['all'] = set([])
+        # roles['all'] = set([])
+
+        if machine_attributes:
+            assert isinstance(machine_attributes, dict)
+            for ip in machine_attributes.iterkeys():
+                roles['machines'].add(ip)
+                print 'got machine:{0}'.format(ip)
+        else:
+            print 'no machine dict'
 
         if riak_attributes:
             riak_topology = riak_attributes['topology']
             if riak_topology['head']:
                 roles['riak-head'] = set([riak_topology['head']['ipaddr']])
-                roles['all'].add(riak_topology['head']['ipaddr'])
+                # roles['all'].add(riak_topology['head']['ipaddr'])
             else:
                 raise Exception("No head node found for RiakCS cluster!")
 
             if riak_topology.get('nodes'):
                 for n in riak_topology['nodes']:
                     roles['riak-node'].add(n)
-                    roles['all'].add(n)
+                    # roles['all'].add(n)
             if riak_topology.get('load_balancer'):
                 riak_lb = None
                 if self.env_dict.get('nginx'):
@@ -105,13 +122,13 @@ class RoleBuilder():
                 else:
                     raise Exception("No Load-Balancer found for RiakCS cluster.")
                 roles[riak_lb] = set([riak_topology['load_balancer']])
-                roles['all'].add(riak_topology['load_balancer'])
+                # roles['all'].add(riak_topology['load_balancer'])
 
         if ceph_attributes:
             ceph_topology = ceph_attributes['topology']
             if ceph_topology['mon_bootstrap']:
                 roles['mon-bootstrap'] = set([ceph_topology['mon_bootstrap']['ipaddr']])
-                roles['all'].add(ceph_topology['mon_bootstrap']['ipaddr'])
+                # roles['all'].add(ceph_topology['mon_bootstrap']['ipaddr'])
             else:
                 raise Exception("No Monitor found for bootstraping!")
 
@@ -119,14 +136,14 @@ class RoleBuilder():
                 monset = set()
                 for mon in ceph_topology['mons']:
                     monset.add(mon['ipaddr'])
-                    roles['all'].add(mon['ipaddr'])
+                    # roles['all'].add(mon['ipaddr'])
                 roles['ceph-mons'] = monset
 
             if ceph_topology['osds']:
                 osdset = set()
                 for osd in ceph_topology['osds']:
                     osdset.add(osd['ipaddr'])
-                    roles['all'].add(osd['ipaddr'])
+                    # roles['all'].add(osd['ipaddr'])
                 roles['ceph-osds'] = osdset
             else:
                 raise Exception("No OSD Found!")
@@ -136,17 +153,17 @@ class RoleBuilder():
 
             # Add CLC
             roles['clc'] = set([topology['clc-1']])
-            roles['all'].add(topology['clc-1'])
+            # roles['all'].add(topology['clc-1'])
 
             # Add UFS
             roles['user-facing'] = set(topology['user-facing'])
-            for ufs in topology['user-facing']:
-                roles['all'].add(ufs)
+            # for ufs in topology['user-facing']:
+            #     roles['all'].add(ufs)
 
             # Add Walrus
             if 'walrus' in topology:
                 roles['walrus'] = set([topology['walrus']])
-                roles['all'].add(topology['walrus'])
+                # roles['all'].add(topology['walrus'])
             else:
                 # No walrus defined assuming RiakCS
                 roles['walrus'] = set()
@@ -174,7 +191,7 @@ class RoleBuilder():
                 for node in nodes:
                     roles['node-controller'].add(node)
                     roles['cluster'][name].add(node)
-                roles['all'].update(roles['cluster'][name])
+                # roles['all'].update(roles['cluster'][name])
 
             # Add Midokura roles
             midokura_attributes = self.env_dict.get('midokura', None)
@@ -198,4 +215,10 @@ class RoleBuilder():
                     roles['mido-zookeeper'].add(str(host).split(':')[0])
                 for host in self.env_dict.get('midokura', {}).get('cassandras', []):
                     roles['mido-cassandra'].add(host)
+
+            all_set = set([])
+            for role, role_set in roles.iteritems():
+                for host in role_set:
+                    all_set.add(host)
+            roles['all'] = all_set
         return roles

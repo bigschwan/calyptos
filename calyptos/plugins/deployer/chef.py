@@ -98,7 +98,9 @@ class Chef(DeployerPlugin):
         execute(self.chef_manager.pull_node_info, hosts=hosts)
         return results
 
+
     def prepare(self):
+        print 'Starting prepare on hosts:"{0}"'.format(",".join(self.all_hosts))
         self.chef_manager.sync_ssh_key(self.all_hosts)
         self.chef_manager.clear_run_list(self.all_hosts)
         order = [self.chef_manager.push_deployment_data,
