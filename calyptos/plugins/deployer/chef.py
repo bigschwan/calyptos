@@ -78,7 +78,7 @@ class Chef(DeployerPlugin):
                   self.environment_name + '.json') as env_file:
             return json.loads(env_file.read())
 
-    def _get_network_info_for_nodes(self, nodes, repodir=None):
+    def _get_network_info_for_nodes(self, repodir=None):
         repodir = repodir or self.chef_repo_dir + '/nodes/'
         files = os.listdir(repodir)
         node_dict = {}
