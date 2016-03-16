@@ -216,10 +216,10 @@ class RoleBuilder():
                 for host in self.env_dict.get('midokura', {}).get('cassandras', []):
                     roles['mido-cassandra'].add(host)
 
-            all_set = set([])
-            for role, role_set in roles.iteritems():
-                for host in role_set:
-                    all_set.add(host)
-            roles['all'] = all_set
-            print 'Roles for "all"\n""{0}"'.format("\n".join(str(x) for x in roles['all']))
+        all_set = set([])
+        for role, role_set in roles.iteritems():
+            for host in role_set:
+                all_set.add(host)
+        roles['all'] = all_set
+        print 'Roles for "all"\n""{0}"'.format("\n".join(str(x) for x in roles['all']))
         return roles

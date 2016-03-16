@@ -78,6 +78,47 @@ class Chef(DeployerPlugin):
                   self.environment_name + '.json') as env_file:
             return json.loads(env_file.read())
 
+    def _get_network_info_for_nodes(self, nodes, repodir=None):
+        repodir = repodir or self.chef_repo_dir + '/nodes/'
+        files = os.listdir(repodir)
+        node_dict = {}
+        for fpath in files:
+            if not fpath.endswith('.json'):
+                continue
+            fpath = os.path.join(repodir, fpath)
+            try:
+                with open(fpath) as node_file:
+                    node_json = json.loads(node_file)
+                    node_network_info = self._get_network_info_from_node_json(node_json=node_json)
+                    for host in self.all_hosts:
+                        if host == node_network_info.get('fqdn'):
+                            node_dict[host] = node_network_info
+                            continue
+                        for iface in node_network_info.get('interfaces'):
+                            if iface.get('ip') == host:
+                                node_dict[host] = node_network_info
+                                continue
+                        print red('Could not find node info for host:"{0}"'.format(host))
+            except Exception as E:
+                print red('Error loading json from:"{0}"\nerr:"{1}"'.format(fpath, E))
+        return node_dict
+
+    def _get_network_info_from_node_json(self, node_json):
+        network = {}
+        node_interfaces = {}
+        network['fqdn'] = node_json.get('automatic', {}).get('fqdn')
+        interfaces = node_json.get('automatic', {}).get('network', {}).get('interfaces', None)
+        for i_name, i_dict in interfaces.iteritems():
+            node_interfaces[i_name] = {'ip': None, 'networklen': None, 'mac': None}
+            for addr, addr_dict in i_dict.get('addresses', {}).iteritems():
+                if addr_dict.get('family', None) == 'inet':
+                    node_interfaces[i_name]['ip'] = addr
+                    node_interfaces[i_name]['networklen'] = addr_dict.get('prefixlen')
+                if addr_dict.get('family', None) == 'lladdr':
+                    node_interfaces[i_name]['mac'] = addr
+        network['interfaces'] = interfaces
+        return network
+
     def _run_chef_on_hosts(self, hosts):
         with hide(*self.hidden_outputs):
             execute(self.chef_manager.push_deployment_data, hosts=hosts)
@@ -98,6 +139,10 @@ class Chef(DeployerPlugin):
         execute(self.chef_manager.pull_node_info, hosts=hosts)
         return results
 
+    def build_machines(self):
+        print 'Starting build_machines on hosts:"{0}"'.format(",".join(self.all_hosts))
+        self._run_chef_on_hosts(self.all_hosts)
+
 
     def prepare(self):
         print 'Starting prepare on hosts:"{0}"'.format(",".join(self.all_hosts))
@@ -111,6 +156,8 @@ class Chef(DeployerPlugin):
             with hide(*self.hidden_outputs):
                 execute(method, hosts=self.all_hosts)
         print green('Prepare has completed successfully. Continue on to the bootstrap phase')
+        node_dicts = self._get_network_info_for_nodes()
+        print green(json.dumps(node_dicts, indent=2))
 
     def bootstrap(self):
         # Install CLC and Initialize DB
