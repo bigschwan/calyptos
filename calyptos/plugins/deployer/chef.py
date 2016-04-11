@@ -11,10 +11,13 @@ from calyptos.rolebuilder import RoleBuilder
 
 
 class Chef(DeployerPlugin):
+    _NETWORK_MAPPING_JSON = 'machine_network_mapping.json'
+
     def __init__(self, password, environment_file='etc/environment.yml',
                  config_file='config.yml', debug=False, branch='euca-4.1',
                  cookbook_repo='https://github.com/eucalyptus/eucalyptus-cookbook', update_repo=True):
         self.chef_repo_dir = 'chef-repo'
+        self._node_network_mapping = None
         self.environment_file = environment_file
         if debug:
             self.hidden_outputs = []
@@ -78,35 +81,43 @@ class Chef(DeployerPlugin):
                   self.environment_name + '.json') as env_file:
             return json.loads(env_file.read())
 
-    def _get_network_info_for_nodes(self, repodir=None):
-        repodir = repodir or self.chef_repo_dir + '/nodes/'
-        files = os.listdir(repodir)
+    def _update_network_mapping_for_nodes(self, repo_dir=None, update_chef_repo=True):
+        repo_dir = repo_dir or self.chef_repo_dir + '/nodes/'
+        files = os.listdir(repo_dir)
         node_dict = {}
         for fpath in files:
             if not fpath.endswith('.json'):
                 continue
-            fpath = os.path.join(repodir, fpath)
+            fpath = os.path.join(repo_dir, fpath)
             try:
                 with open(fpath) as node_file:
-                    node_json = json.loads(node_file)
-                    node_network_info = self._get_network_info_from_node_json(node_json=node_json)
-                    for host in self.all_hosts:
-                        if host == node_network_info.get('fqdn'):
+                    node_json = json.loads(node_file.read())
+                node_network_info = self._get_network_info_from_node_json(node_json=node_json)
+                for host in self.all_hosts:
+                    if host == node_network_info.get('fqdn'):
+                        node_dict[host] = node_network_info
+                        continue
+                    for iname, iface in node_network_info.get('interfaces', {}).iteritems():
+                        if iface.get('ip') == host:
                             node_dict[host] = node_network_info
                             continue
-                        for iface in node_network_info.get('interfaces'):
-                            if iface.get('ip') == host:
-                                node_dict[host] = node_network_info
-                                continue
-                        print red('Could not find node info for host:"{0}"'.format(host))
+                    print red('Could not find node info for host:"{0}"'.format(host))
             except Exception as E:
                 print red('Error loading json from:"{0}"\nerr:"{1}"'.format(fpath, E))
+                raise
+        if update_chef_repo:
+            mapping_file = os.path.join(repo_dir, self._NETWORK_MAPPING_JSON)
+            with open(mapping_file, 'w') as mf:
+                mf.write(json.dumps(node_dict, indent=2))
+            print green('Updated machine network mapping file: "{0}"'.format(mapping_file))
+        self._node_network_mapping = node_dict
         return node_dict
 
     def _get_network_info_from_node_json(self, node_json):
-        network = {}
+        machine_dict = {}
         node_interfaces = {}
-        network['fqdn'] = node_json.get('automatic', {}).get('fqdn')
+        machine_dict['machinename'] = node_json.get('automatic', {}).get('machinename')
+        machine_dict['fqdn'] = node_json.get('automatic', {}).get('fqdn')
         interfaces = node_json.get('automatic', {}).get('network', {}).get('interfaces', None)
         for i_name, i_dict in interfaces.iteritems():
             node_interfaces[i_name] = {'ip': None, 'networklen': None, 'mac': None}
@@ -116,8 +127,8 @@ class Chef(DeployerPlugin):
                     node_interfaces[i_name]['networklen'] = addr_dict.get('prefixlen')
                 if addr_dict.get('family', None) == 'lladdr':
                     node_interfaces[i_name]['mac'] = addr
-        network['interfaces'] = interfaces
-        return network
+        machine_dict['interfaces'] = node_interfaces
+        return machine_dict
 
     def _run_chef_on_hosts(self, hosts):
         with hide(*self.hidden_outputs):
@@ -139,9 +150,23 @@ class Chef(DeployerPlugin):
         execute(self.chef_manager.pull_node_info, hosts=hosts)
         return results
 
-    def build_machines(self):
+    @property
+    def node_network_mapping(self):
+        if not self._node_network_mapping:
+            try:
+                self._node_network_mapping = self._update_network_mapping_for_nodes()
+            except Exception as NE:
+                print red('WARNING: Failure to read node network mapping. Err:"{0}'.format(NE))
+        return self._node_network_mapping
+
+
+
+    def build_machines(self, repo_dir=None):
         print 'Starting build_machines on hosts:"{0}"'.format(",".join(self.all_hosts))
+        repo_dir = repo_dir or self.chef_repo_dir
         self._run_chef_on_hosts(self.all_hosts)
+
+        self.chef_manager.clear_run_list(self.all_hosts)
 
 
     def prepare(self):
@@ -156,8 +181,7 @@ class Chef(DeployerPlugin):
             with hide(*self.hidden_outputs):
                 execute(method, hosts=self.all_hosts)
         print green('Prepare has completed successfully. Continue on to the bootstrap phase')
-        node_dicts = self._get_network_info_for_nodes()
-        print green(json.dumps(node_dicts, indent=2))
+        self._update_network_mapping_for_nodes(update_chef_repo=True)
 
     def bootstrap(self):
         # Install CLC and Initialize DB
