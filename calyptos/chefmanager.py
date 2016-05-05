@@ -3,7 +3,7 @@ from fabric.contrib.project import rsync_project
 import json
 from os.path import splitext
 import os
-
+import socket
 from fabric.api import *
 from fabric.colors import *
 
@@ -124,7 +124,7 @@ class ChefManager():
         for node, node_info in self.node_hash.iteritems():
             #ipaddress = node_info['automatic']['ipaddress']
             if target_address in self.get_node_address_list(node_info):
-                return node_info['name']
+                return node
         raise FailedToFindNodeException("Unable to find node: " +
                                         target_address)
 
@@ -196,10 +196,19 @@ class ChefManager():
             rsync_project(local_dir='./',
                     remote_dir=self.remote_folder_path,
                     ssh_opts=self.ssh_opts, delete=True)
-
     def pull_node_info(self):
-        local_path = 'chef-repo/nodes/' + run('hostname') + '.json'
-        remote_path = self.remote_folder_path + local_path
-        if self.local_hostname != run('hostname'):
-            get(remote_path=remote_path, local_path=local_path)
-            self.read_node_hash(local_path)
+        hostname = run('hostname')
+        try:
+            nodename = socket.gethostbyaddr(hostname)[0]
+        except Exception as E:
+            print red('Warning error during hostname lookup:"{0}", err:"{1}"'.format(hostname, E))
+        local_path = 'chef-repo/nodes/' + str(hostname) + '.json'
+        r_path = 'chef-repo/nodes/' + str(nodename) + '.json'
+        remote_path = self.remote_folder_path + r_path
+        try:
+            if self.local_hostname != run('hostname'):
+                get(remote_path=remote_path, local_path=local_path)
+                self.read_node_hash(local_path)
+        except Exception as E:
+            print red('Failed to download node info. Localpath:{0}, remotepath:{1}'.format(local_path, remote_path))
+            raise E
