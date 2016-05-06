@@ -203,7 +203,7 @@ class ChefManager():
         except Exception as E:
             print red('Warning error during hostname lookup:"{0}", err:"{1}"'.format(hostname, E))
         local_path = 'chef-repo/nodes/' + str(hostname) + '.json'
-        r_path = 'chef-repo/nodes/' + str(nodename) + '.json'
+        r_path = 'chef-repo/nodes/' + str(hostname) + '.json'
         remote_path = self.remote_folder_path + r_path
         try:
             if self.local_hostname != run('hostname'):

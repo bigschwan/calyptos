@@ -14,7 +14,7 @@ default_attributes:
       max-cores: 32
     network:
       bridge-interface: br0
-      bridged-nic: em1
+      bridged-nic: eth0
       config-json:
         Clusters:
         - Name: one
