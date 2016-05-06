@@ -2,7 +2,7 @@ default_attributes:
   eucalyptus:
     default-img-url: http://images.objectstorage.cloud.qa1.eucalyptus-systems.com:8773/precise-server-cloudimg-amd64-disk1.img
     dns:
-      domain: euca-172-31-6-75.eucalyptus.internal 
+      domain: euca-172.31.15.241.eucalyptus.internal 
     enterprise-repo: http://packages.release.eucalyptus-systems.com/yum/tags/enterprise-devel/centos/6/x86_64/
     euca2ools-repo: http://packages.release.eucalyptus-systems.com/yum/tags/euca2ools-devel/centos/6/x86_64/
     eucalyptus-repo: http://packages.release.eucalyptus-systems.com/yum/tags/eucalyptus-devel/centos/6/x86_64/
@@ -33,7 +33,7 @@ default_attributes:
             Netmask: 255.255.0.0
             Subnet: 192.168.0.0
         InstanceDnsServers:
-        - 172.31.6.75 
+        - 172.31.15.241 
         Mode: EDGE
         PublicIps:
         - 192.168.30.0
@@ -55,17 +55,17 @@ default_attributes:
       cloud.euca_log_level: DEBUG
       cloudformation.url_domain_whitelist: '*s3.amazonaws.com, git.qa1.eucalyptus-systems.com'
     topology:
-      clc-1: 172.31.6.75 
+      clc-1: 172.31.15.241 
       clusters:
         one:
-          cc-1: 172.31.6.75 
+          cc-1: 172.31.15.241 
           das-device: vg01
-          nodes: 172.31.15.211
-          sc-1: 172.31.6.75 
+          nodes: 172.31.4.233
+          sc-1: 172.31.15.241 
           storage-backend: das
       user-facing: 
-      - 172.31.6.75 
-      walrus: 172.31.6.75
+      - 172.31.15.241 
+      walrus: 172.31.15.241
     yum-options: --nogpg
 description: Eucalyptus Streamer Test
 name: streamer_demo

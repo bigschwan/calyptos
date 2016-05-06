@@ -3,7 +3,6 @@ from fabric.contrib.project import rsync_project
 import json
 from os.path import splitext
 import os
-import socket
 from fabric.api import *
 from fabric.colors import *
 
@@ -185,10 +184,11 @@ class ChefManager():
             with hide('running'):
                 return run('knife node bulk delete -z -E {0} -y ".*"'.format(self.environment_name))
 
-    def run_chef_client(self, chef_command="chef-client -z"):
+    def run_chef_client(self, chef_command="chef-client -z", hide_opts=None):
         with cd(self.remote_folder_path + 'chef-repo'):
-            with hide('running'):
-                return run(chef_command + " -E " + self.environment_name + " -l info")
+            hide_opts = hide_opts or []
+            with hide(*hide_opts):
+                return run(chef_command + " -E " + self.environment_name + " -N $(hostname) -l info")
 
     def push_deployment_data(self):
         with hide(*self.hidden_outputs):
@@ -196,17 +196,13 @@ class ChefManager():
             rsync_project(local_dir='./',
                     remote_dir=self.remote_folder_path,
                     ssh_opts=self.ssh_opts, delete=True)
+   
     def pull_node_info(self):
         hostname = run('hostname')
-        try:
-            nodename = socket.gethostbyaddr(hostname)[0]
-        except Exception as E:
-            print red('Warning error during hostname lookup:"{0}", err:"{1}"'.format(hostname, E))
         local_path = 'chef-repo/nodes/' + str(hostname) + '.json'
-        r_path = 'chef-repo/nodes/' + str(hostname) + '.json'
-        remote_path = self.remote_folder_path + r_path
+        remote_path = self.remote_folder_path + local_path
         try:
-            if self.local_hostname != run('hostname'):
+            if self.local_hostname != hostname:
                 get(remote_path=remote_path, local_path=local_path)
                 self.read_node_hash(local_path)
         except Exception as E:
