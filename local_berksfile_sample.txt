@@ -1,0 +1,12 @@
+#Sample Berksfile. Will use all the cookbooks in the provided local dir cookbook_dir below...
+ 
+source "https://supermarket.chef.io"
+cookbook_dir = '/root/envcalyptos/calyptos/mycookbooks/**'
+
+metadata
+Dir[cookbook_dir].each do |path|
+  if File.basename(path) != "eucalyptus" 
+      cookbook File.basename(path), path: path
+  end
+end
+
