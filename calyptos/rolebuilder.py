@@ -182,6 +182,7 @@ class RoleBuilder():
                 if 'nodes' in topology['clusters'][name]:
                     nodes = topology['clusters'][name]['nodes'].split()
                 else:
+                    nodes = []
                     print ("Unable to find nodes in topology for cluster " + name)
                 for node in nodes:
                     roles['node-controller'].add(node)
