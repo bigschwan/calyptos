@@ -186,10 +186,12 @@ class ChefManager():
             with hide('running'):
                 return run('knife node bulk delete -z -E {0} -y ".*"'.format(self.environment_name))
 
-    def run_chef_client(self, chef_command="chef-client -z"):
+    def run_chef_client(self, chef_command="chef-client -z", hide_opts=None):
         with cd(self.remote_folder_path + 'chef-repo'):
-            with hide('running'):
-                return run(chef_command + " -E " + self.environment_name + " -l info")
+            hide_opts = hide_opts or []
+            with hide(*hide_opts):
+                return run("{0} -E {1} -N $(hostname) -l info".format(chef_command,
+                                                                        self.environment_name))
 
     def push_deployment_data(self):
         with hide(*self.hidden_outputs):
