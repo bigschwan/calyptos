@@ -201,8 +201,14 @@ class ChefManager():
                     ssh_opts=self.ssh_opts, delete=True)
 
     def pull_node_info(self):
-        local_path = 'chef-repo/nodes/' + run('hostname') + '.json'
+        hostname = run('hostname')
+        local_path = 'chef-repo/nodes/' + str(hostname) + '.json'
         remote_path = self.remote_folder_path + local_path
-        if self.local_hostname != run('hostname'):
-            get(remote_path=remote_path, local_path=local_path)
-            self.read_node_hash(local_path)
+        try:
+            if self.local_hostname != hostname:
+                get(remote_path=remote_path, local_path=local_path)
+                self.read_node_hash(local_path)
+        except Exception as E:
+            print red('Failed to download node info. Localpath:{0}, remotepath:{1}'
+                      .format(local_path, remote_path))
+            raise E
